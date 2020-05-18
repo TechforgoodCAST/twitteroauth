@@ -204,9 +204,9 @@ class TwitterOAuth extends Config
      *
      * @return array|object
      */
-    public function get($path, array $parameters = [])
+    public function get($path, array $parameters = [], string $host = null)
     {
-        return $this->http('GET', self::API_HOST, $path, $parameters, false);
+        return $this->http('GET', $host ?? self::API_HOST.'/'.self::API_VERSION, $path, $parameters, false);
     }
 
     /**
@@ -218,9 +218,9 @@ class TwitterOAuth extends Config
      *
      * @return array|object
      */
-    public function post($path, array $parameters = [], $json = false)
+    public function post($path, array $parameters = [], $json = false, string $host = null)
     {
-        return $this->http('POST', self::API_HOST, $path, $parameters, $json);
+        return $this->http('POST', $host ?? self::API_HOST.'/'.self::API_VERSION, $path, $parameters, $json);
     }
 
     /**
@@ -231,9 +231,9 @@ class TwitterOAuth extends Config
      *
      * @return array|object
      */
-    public function delete($path, array $parameters = [])
+    public function delete($path, array $parameters = [], string $host = null)
     {
-        return $this->http('DELETE', self::API_HOST, $path, $parameters, false);
+        return $this->http('DELETE', $host ?? self::API_HOST.'/'.self::API_VERSION, $path, $parameters, false);
     }
 
     /**
@@ -244,9 +244,9 @@ class TwitterOAuth extends Config
      *
      * @return array|object
      */
-    public function put($path, array $parameters = [])
+    public function put($path, array $parameters = [], string $host = null)
     {
-        return $this->http('PUT', self::API_HOST, $path, $parameters, false);
+        return $this->http('PUT', $host ?? self::API_HOST.'/'.self::API_VERSION, $path, $parameters, false);
     }
 
     /**
@@ -341,18 +341,13 @@ class TwitterOAuth extends Config
      */
     private function mediaInitParameters(array $parameters)
     {
-        $return = [
+        $allowed_keys = ['media_type', 'additional_owners', 'media_category', 'shared'];
+        $base = [
             'command' => 'INIT',
-            'media_type' => $parameters['media_type'],
             'total_bytes' => filesize($parameters['media'])
         ];
-        if (isset($parameters['additional_owners'])) {
-            $return['additional_owners'] = $parameters['additional_owners'];
-        }
-        if (isset($parameters['media_category'])) {
-            $return['media_category'] = $parameters['media_category'];
-        }
-        return $return;
+        $allowed_parameters = array_intersect_key($parameters, array_flip($allowed_keys));
+        return array_merge($base, $allowed_parameters);
     }
 
     /**
@@ -386,7 +381,11 @@ class TwitterOAuth extends Config
     {
         $this->resetLastResponse();
         $this->resetAttemptsNumber();
-        $url = sprintf('%s/%s/%s.json', $host, self::API_VERSION, $path);
+		if($host == self::API_HOST){
+			$url = sprintf('%s/%s.json', $host, $path);
+		}else{
+			$url = sprintf('%s/%s', $host, $path);			
+		}
         $this->response->setApiPath($path);
         if (!$json) {
             $parameters = $this->cleanUpParameters($parameters);
@@ -548,7 +547,10 @@ class TwitterOAuth extends Config
 
         // Throw exceptions on cURL errors.
         if (curl_errno($curlHandle) > 0) {
-            throw new TwitterOAuthException(curl_error($curlHandle), curl_errno($curlHandle));
+            $error = curl_error($curlHandle);
+            $errorNo = curl_errno($curlHandle);
+            curl_close($curlHandle);
+            throw new TwitterOAuthException($error, $errorNo);
         }
 
         $this->response->setHttpCode(curl_getinfo($curlHandle, CURLINFO_HTTP_CODE));
